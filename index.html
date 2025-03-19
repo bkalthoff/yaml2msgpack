@@ -1,0 +1,90 @@
+<!DOCTYPE html>
+<html>
+<head>
+	<meta charset="UTF-8">
+	<title>YAML to MessagePack Converter</title>
+	<style>
+		body { font-family: Arial, sans-serif; margin: 20px; }
+		.container {
+			display: flex;
+			align-items: center;
+			justify-content: center;
+			gap: 20px;
+		}
+		.section {
+			flex: 1;
+			display: flex;
+			flex-direction: column;
+		}
+		textarea { width: 100%; margin-bottom: 10px; }
+		label { font-weight: bold; }
+		.button-section {
+			display: flex;
+			justify-content: center;
+			align-items: center;
+			flex: 0 0 auto;
+		}
+		#errorOutput { width: 100%; }
+	</style>
+	<script src="https://cdn.jsdelivr.net/pyodide/v0.23.4/full/pyodide.js"></script>
+</head>
+<body>
+	<h1>YAML to MessagePack Converter (WASM with Pyodide)</h1>
+	<div class="container">
+		<div class="section">
+			<label for="yamlInput">Input YAML:</label>
+			<textarea id="yamlInput" rows="15"></textarea>
+		</div>
+		<div class="section button-section">
+			<button id="convertBtn">Convert</button>
+		</div>
+		<div class="section">
+			<label for="msgpackOutput">Output MessagePack (hex):</label>
+			<textarea id="msgpackOutput" rows="15" placeholder="Output hex will appear here..." readonly></textarea>
+		</div>
+	</div>
+	<div class="section">
+		<label for="errorOutput">Errors:</label>
+		<textarea id="errorOutput" rows="5" placeholder="Errors will appear here..." readonly></textarea>
+	</div>
+
+	<script>
+		async function main() {
+			let pyodide = await loadPyodide();
+			await pyodide.loadPackage("micropip");
+			await pyodide.runPythonAsync(`
+				import micropip
+				await micropip.install('pyyaml')
+				await micropip.install('msgpack')
+			`);
+			pyodide.runPython(`
+				def yaml_to_msgpack_hex(yaml_text):
+						import yaml, msgpack
+						try:
+								data = yaml.safe_load(yaml_text)
+								packed = msgpack.packb(data)
+								return ' '.join(f'{byte:02X}' for byte in packed)
+						except Exception as e:
+								return "Error: " + str(e)
+				`);
+			document.getElementById("convertBtn").addEventListener("click", function() {
+				let yamlInput = document.getElementById("yamlInput").value;
+				try {
+					let result = pyodide.globals.get("yaml_to_msgpack_hex")(yamlInput);
+					if (result.startsWith("Error:")) {
+						document.getElementById("errorOutput").value = result;
+						document.getElementById("msgpackOutput").value = "";
+					} else {
+						document.getElementById("msgpackOutput").value = result;
+						document.getElementById("errorOutput").value = "";
+					}
+				} catch (err) {
+					document.getElementById("errorOutput").value = "Conversion error: " + err;
+					document.getElementById("msgpackOutput").value = "";
+				}
+			});
+		}
+		main();
+	</script>
+</body>
+</html>
