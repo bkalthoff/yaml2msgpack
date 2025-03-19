@@ -16,7 +16,7 @@
 			display: flex;
 			flex-direction: column;
 		}
-		textarea { width: 100%; margin-bottom: 10px; }
+		textarea, input[type="text"] { width: 100%; margin-bottom: 10px; }
 		label { font-weight: bold; }
 		.button-section {
 			display: flex;
@@ -25,15 +25,29 @@
 			flex: 0 0 auto;
 		}
 		#errorOutput { width: 100%; }
+		#qrcode {
+			width: 512px;
+			margin: 20px auto;
+			text-align: center;
+		}
+		#qrcode canvas, #qrcode img {
+			display: block;
+			margin: 0 auto;
+		}
 	</style>
+	<!-- Load Pyodide -->
 	<script src="https://cdn.jsdelivr.net/pyodide/v0.23.4/full/pyodide.js"></script>
+	<!-- Load QRCode library -->
+	<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
 </head>
 <body>
 	<h1>YAML to MessagePack Converter (WASM with Pyodide)</h1>
+	<label for="qrPrefix">QR Code Prefix:</label>
+	<input type="text" id="qrPrefix" placeholder="Enter QR code prefix (e.g., my.website.com/)">
 	<div class="container">
 		<div class="section">
 			<label for="yamlInput">Input YAML:</label>
-			<textarea id="yamlInput" rows="15"></textarea>
+			<textarea id="yamlInput" rows="15" placeholder="Enter YAML here..."></textarea>
 		</div>
 		<div class="section button-section">
 			<button id="convertBtn">Convert</button>
@@ -47,8 +61,27 @@
 		<label for="errorOutput">Errors:</label>
 		<textarea id="errorOutput" rows="5" placeholder="Errors will appear here..." readonly></textarea>
 	</div>
+	<div id="qrcode"></div>
 
 	<script>
+		function saveField(id, key) {
+			document.getElementById(id).addEventListener('input', function() {
+				localStorage.setItem(key, this.value);
+			});
+		}
+
+		function loadCachedField(id, key) {
+			let cached = localStorage.getItem(key);
+			if (cached !== null) {
+				document.getElementById(id).value = cached;
+			}
+		}
+
+		loadCachedField('yamlInput', 'yamlInput');
+		loadCachedField('qrPrefix', 'qrPrefix');
+		saveField('yamlInput', 'yamlInput');
+		saveField('qrPrefix', 'qrPrefix');
+
 		async function main() {
 			let pyodide = await loadPyodide();
 			await pyodide.loadPackage("micropip");
@@ -66,7 +99,7 @@
 								return ' '.join(f'{byte:02X}' for byte in packed)
 						except Exception as e:
 								return "Error: " + str(e)
-				`);
+			`);
 			document.getElementById("convertBtn").addEventListener("click", function() {
 				let yamlInput = document.getElementById("yamlInput").value;
 				try {
@@ -74,13 +107,25 @@
 					if (result.startsWith("Error:")) {
 						document.getElementById("errorOutput").value = result;
 						document.getElementById("msgpackOutput").value = "";
+						document.getElementById("qrcode").innerHTML = "";
 					} else {
 						document.getElementById("msgpackOutput").value = result;
 						document.getElementById("errorOutput").value = "";
+						let hexNoSpaces = result.replace(/\s/g, '');
+						let qrPrefix = document.getElementById("qrPrefix").value;
+						let qrText = qrPrefix + hexNoSpaces;
+						document.getElementById("qrcode").innerHTML = "";
+						// Increase QR code size by adjusting width and height
+						new QRCode(document.getElementById("qrcode"), {
+							text: qrText,
+							width: 512,
+							height: 512
+						});
 					}
 				} catch (err) {
 					document.getElementById("errorOutput").value = "Conversion error: " + err;
 					document.getElementById("msgpackOutput").value = "";
+					document.getElementById("qrcode").innerHTML = "";
 				}
 			});
 		}
